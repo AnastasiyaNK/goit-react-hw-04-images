@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Searchbar } from './Searchbar';
 import css from './App.module.css';
 import { fetchImages } from 'services/api';
@@ -7,85 +7,75 @@ import { Modal } from './Modal';
 import { ImageGallery } from './ImageGallery';
 import { Button } from './Button';
 
-export class App extends Component {
-  state = {
-    page: 1,
-    query: '',
-    error: null,
-    gallery: [],
-    totalImage: 0,
-    isLoading: false,
-    modal: {
-      isOpen: false,
-      modalData: null,
-    },
+export const App = () => {
+  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState(null);
+  const [gallery, setGallery] = useState([]);
+  const [totalImage, setTotalImage] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [modal, setModal] = useState({ isOpen: false, modalData: null });
+
+  useEffect(() => {
+    if (query === '' && page === 1) return;
+
+    const getImages = async () => {
+      try {
+        setIsLoading(true);
+        const imagesApi = await fetchImages(query, page);
+        setGallery(prevState => [...prevState, ...imagesApi.hits]);
+        setTotalImage(imagesApi.totalHits);
+      } catch (error) {
+        setError(error.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    getImages();
+  }, [query, page]);
+
+  const handleSearch = searchQuery => {
+    setQuery(searchQuery);
+    setPage(1);
+    setGallery([]);
+    setTotalImage(0);
   };
 
-  componentDidUpdate(_, prevState) {
-    if (
-      prevState.query !== this.state.query ||
-      prevState.page !== this.state.page
-    ) {
-      this.getImages();
-    }
-  }
-
-  getImages = async () => {
-    try {
-      this.setState({ isLoading: true });
-      const imagesApi = await fetchImages(this.state.query, this.state.page);
-      this.setState(prevState => ({
-        gallery: [...prevState.gallery, ...imagesApi.hits],
-        totalImage: imagesApi.totalHits,
-      }));
-    } catch (error) {
-      this.setState({ error: error.message });
-    } finally {
-      this.setState({ isLoading: false });
-    }
+  const handleLoadMore = () => {
+    setPage(prevState => prevState + 1);
   };
 
-  handleSearch = searchQuery => {
-    this.setState({ query: searchQuery, page: 1, gallery: [], totalImage: 0 });
+  const onOpenModal = largeImageURL => {
+    setModal({ isOpen: true, modalData: largeImageURL });
   };
 
-  handleLoadMore = () => {
-    this.setState(prevState => ({ page: prevState.page + 1 }));
+  const onCloseModal = () => {
+    setModal({ isOpen: false, modalData: null });
   };
 
-  onOpenModal = largeImageURL => {
-    this.setState({ modal: { isOpen: true, modalData: largeImageURL } });
-  };
+  return (
+    <div className={css.appContainer}>
+      <Searchbar handleSearch={handleSearch} />
+      {isLoading === true && (
+        <ColorRing
+          visible={true}
+          height="80"
+          width="80"
+          ariaLabel="blocks-loading"
+          wrapperStyle={{}}
+          wrapperClass="blocks-wrapper"
+          colors={['#e15b64', '#f47e60', '#f8b26a', '#abbd81', '#849b87']}
+        />
+      )}
+      <ImageGallery gallery={gallery} onOpenModal={onOpenModal} />
 
-  onCloseModal = () => {
-    this.setState({ modal: { isOpen: false, modalData: null } });
-  };
-
-  render() {
-    const { isLoading, gallery, modal, totalImage } = this.state;
-    return (
-      <div className={css.appContainer}>
-        <Searchbar handleSearch={this.handleSearch} />
-        {isLoading === true && (
-          <ColorRing
-            visible={true}
-            height="80"
-            width="80"
-            ariaLabel="blocks-loading"
-            wrapperStyle={{}}
-            wrapperClass="blocks-wrapper"
-            colors={['#e15b64', '#f47e60', '#f8b26a', '#abbd81', '#849b87']}
-          />
-        )}
-        <ImageGallery gallery={gallery} onOpenModal={this.onOpenModal} />
-
-        {!isLoading && totalImage !== gallery.length && (
-          <Button handleLoadMore={this.handleLoadMore} />
-        )}
-        {this.state.modal.isOpen && (
-          <Modal onCloseModal={this.onCloseModal} modalData={modal.modalData} />
-        )}
-      </div>
-    );
-  }
-}
+      {!isLoading && totalImage !== gallery.length && (
+        <Button handleLoadMore={handleLoadMore} />
+      )}
+      {error && <p>Error: {error}</p>}
+      {modal.isOpen && (
+        <Modal onCloseModal={onCloseModal} modalData={modal.modalData} />
+      )}
+    </div>
+  );
+};
